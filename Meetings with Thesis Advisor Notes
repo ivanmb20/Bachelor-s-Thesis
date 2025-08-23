@@ -1,0 +1,10 @@
+# First meeting with Thesis Advisor
+
+AIs from thesis student
+* To check that the Leapfrog method is working perfectly, for this, create a script where a problem can be solved by using the Leapfrog method,
+this problem should be as simple as to serve as testing for the Method (in ode system of equations)
+* To finish to refine the PIV script to graph everything as per OpenPIV documentation (put the right scales in the graphs)
+
+AIs from thesis advisor
+* To check, alongside the student, the boundary conditions in the problem of the cavity (that will be useful as well for the 3d rheometer)
+* To run the OpenPiv library in a simpler problem to check how it works and if it works perfectly as to trust the library
