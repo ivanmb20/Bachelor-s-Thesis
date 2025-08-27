@@ -1,5 +1,5 @@
 compute_net_forces_parallel toma un array de posiciones (N,2) y devuelve las fuerzas netas en cada partícula (N,2) acumulando las fuerzas pairwise calculadas por pairwise_lennarJonnes_gu.
-Explicación paso a paso
+# Explicación paso a paso
 
 * Entrada esperada: bodies — numpy array shape (N,2), dtype float64 (posiciones x,y).
 * forces = np.zeros((num_bodies, 2), dtype=np.float64): crea el arreglo de salida donde se acumularán fuerzas por partícula.
@@ -19,14 +19,14 @@ Explicación paso a paso
 * Salida y unidades: fuerzas en las unidades definidas en pairwise_lennarJonnes_gu (mismas unidades que posiciones y constantes G,H). Asegúrate de que bodies sea float64 para mantener compatibilidad con la función guvectorize.
 
 
-** Sugerencias de mejora (rendimiento / memoria)
+## **Sugerencias de mejora (rendimiento / memoria)**
 
 * Evitar np.delete y np.tile: calcular pares (i,j) con doble bucle y acumular simétricamente (force_ij sobre i y -force_ij sobre j) para ahorrar la mitad del trabajo.
 * Implementar con numba.njit para loops en Python y eliminar alocaciones intermedias.
 * Si N grande, usar una grilla espacial / cell list para aplicar cutoff rInt y reducir pares evaluados.
 Código sugerido (reemplazo más eficiente usando symmetría + numba): pégalo en tu notebook en lugar de la función actual.
 
-### código sugerido
+### Código sugerido
 
 ```
 
