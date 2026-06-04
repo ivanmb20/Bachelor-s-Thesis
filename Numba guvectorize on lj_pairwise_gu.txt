@@ -1,0 +1,291 @@
+# Uso de `Numba guvectorize` para el cálculo de fuerzas entre partículas
+
+## Introducción
+
+La función `lj_pairwise_gu` utiliza el decorador `@nb.guvectorize` de Numba para acelerar el cálculo de fuerzas entre pares de partículas. Este decorador transforma una función de Python en una **Generalized Universal Function (gufunc)** compilada a código máquina, permitiendo ejecutar grandes cantidades de cálculos numéricos de forma eficiente y paralela.
+
+```python
+@nb.guvectorize(
+    [(float64[:], float64[:], float64[:])],
+    '(n),(n)->(n)',
+    nopython=True,
+    target='parallel'
+)
+def lj_pairwise_gu(body1, body2, outForce):
+    ...
+```
+
+---
+
+# ¿Qué es una Generalized Universal Function (gufunc)?
+
+Una gufunc es una función que opera sobre vectores o matrices y que puede aplicarse automáticamente sobre arreglos de dimensiones superiores.
+
+La firma utilizada en esta implementación es:
+
+```python
+'(n),(n)->(n)'
+```
+
+lo que significa:
+
+- Entrada 1: vector de tamaño `n`
+- Entrada 2: vector de tamaño `n`
+- Salida: vector de tamaño `n`
+
+En esta simulación:
+
+```python
+body1 = [x1, y1]
+body2 = [x2, y2]
+```
+
+por lo que:
+
+```python
+n = 2
+```
+
+Cada llamada a la función calcula la fuerza ejercida por una partícula sobre otra.
+
+---
+
+# Compilación a código máquina
+
+La opción:
+
+```python
+nopython=True
+```
+
+obliga a Numba a traducir toda la función a código máquina nativo.
+
+Por ejemplo:
+
+```python
+dx = x2 - x1
+dy = y2 - y1
+distance_sq = dx*dx + dy*dy
+```
+
+ya no se ejecuta mediante el intérprete de Python, sino mediante instrucciones de bajo nivel directamente ejecutadas por el procesador.
+
+Esto elimina:
+
+- Creación de objetos Python.
+- Verificaciones dinámicas de tipos.
+- Llamadas repetidas al intérprete.
+
+Como resultado, cada evaluación de fuerza puede ejecutarse decenas de veces más rápido que en Python puro.
+
+---
+
+# Vectorización automática
+
+Sin `guvectorize`, el cálculo de fuerzas suele implementarse mediante ciclos anidados:
+
+```python
+for i in range(N):
+    for j in range(N):
+        F[i,j] = lj_pairwise(body[i], body[j])
+```
+
+Cuando el número de partículas aumenta, estos ciclos generan millones de llamadas a funciones Python.
+
+Con `guvectorize`, la función puede aplicarse directamente sobre arreglos completos:
+
+```python
+F = lj_pairwise_gu(A, B)
+```
+
+donde:
+
+```python
+A.shape = (N, 1, 2)
+B.shape = (1, N, 2)
+```
+
+Numba se encarga automáticamente de recorrer todas las combinaciones de partículas sin necesidad de escribir ciclos explícitos en Python.
+
+---
+
+# Paralelización automática
+
+La opción:
+
+```python
+target='parallel'
+```
+
+indica que las distintas evaluaciones de la función son independientes y pueden ejecutarse simultáneamente.
+
+Por ejemplo, los cálculos:
+
+```text
+F12
+F13
+F14
+F15
+```
+
+no dependen entre sí.
+
+Numba puede distribuir automáticamente estos cálculos entre múltiples núcleos del procesador.
+
+Si una máquina dispone de cuatro núcleos:
+
+```text
+Core 1 → Pares 1 a 25 millones
+Core 2 → Pares 25 a 50 millones
+Core 3 → Pares 50 a 75 millones
+Core 4 → Pares 75 a 100 millones
+```
+
+Todo esto ocurre sin necesidad de utilizar:
+
+- `threading`
+- `multiprocessing`
+- `prange`
+
+de forma explícita.
+
+---
+
+# Cálculo físico realizado por la función
+
+La función calcula una fuerza central cuya magnitud depende de la distancia entre partículas.
+
+Primero se calcula el vector separación:
+
+```python
+dx = x2 - x1
+dy = y2 - y1
+```
+
+y la distancia:
+
+```python
+r = sqrt(dx² + dy²)
+```
+
+Posteriormente se obtiene el vector unitario:
+
+```python
+force_x = dx/r
+force_y = dy/r
+```
+
+que define la dirección de la fuerza.
+
+La magnitud se calcula mediante una expresión del tipo:
+
+\[
+F(r)=\frac{-G+Hr^{p-q}}{r^p}
+\]
+
+donde:
+
+- `G` controla la parte atractiva.
+- `H` controla la parte repulsiva.
+- `p` y `q` determinan la forma del potencial.
+
+Finalmente:
+
+\[
+\vec{F}=F(r)\hat{r}
+\]
+
+---
+
+# Radio de interacción
+
+La función incorpora un radio máximo de interacción:
+
+```python
+if distance_sq > rInt*rInt:
+    return
+```
+
+Esto evita calcular fuerzas entre partículas demasiado alejadas.
+
+Además, se introduce una distancia mínima:
+
+```python
+if distance_sq < rMin:
+    distance_sq = rMin
+```
+
+para evitar singularidades numéricas cuando dos partículas se encuentran extremadamente cerca.
+
+---
+
+# Ventajas para simulaciones N-body
+
+En una simulación con `N` partículas existen aproximadamente:
+
+\[
+N(N-1)
+\]
+
+interacciones posibles.
+
+Por ejemplo:
+
+| Número de partículas | Interacciones |
+|---------------------|--------------:|
+| 100 | 9,900 |
+| 1,000 | 999,000 |
+| 10,000 | 99,990,000 |
+
+Por lo tanto, el costo computacional escala aproximadamente como:
+
+\[
+O(N^2)
+\]
+
+Debido a esta complejidad, acelerar cada interacción individual tiene un impacto significativo en el tiempo total de simulación.
+
+Las principales ventajas de `guvectorize` son:
+
+1. **Compilación a código máquina**
+   - Elimina el overhead de Python.
+   - Aumenta considerablemente la velocidad de cada interacción.
+
+2. **Vectorización automática**
+   - Permite aplicar la función a arreglos completos.
+   - Reduce la necesidad de ciclos explícitos.
+
+3. **Paralelización automática**
+   - Aprovecha múltiples núcleos del CPU.
+   - Distribuye los cálculos entre hilos de ejecución.
+
+---
+
+# Limitaciones
+
+Aunque `guvectorize` acelera notablemente el cálculo de fuerzas, no modifica la complejidad fundamental del problema:
+
+\[
+O(N^2)
+\]
+
+Para simulaciones con cientos de miles o millones de partículas suelen utilizarse técnicas adicionales como:
+
+- Neighbor Lists.
+- Verlet Lists.
+- Cell Lists.
+- Paralelización mediante GPU (CUDA).
+
+Estas técnicas reducen drásticamente el número de interacciones que deben evaluarse.
+
+---
+
+# Conclusión
+
+El uso de `Numba guvectorize` permite transformar el cálculo de fuerzas entre partículas en una operación altamente optimizada mediante:
+
+- Compilación a código máquina.
+- Vectorización automática.
+- Paralelización multicore.
+
+Dado que las fuerzas entre pares de partículas son independientes entre sí, este enfoque resulta especialmente adecuado para simulaciones de dinámica molecular y sistemas N-body, proporcionando aceleraciones de uno o dos órdenes de magnitud respecto a implementaciones equivalentes en Python puro.
