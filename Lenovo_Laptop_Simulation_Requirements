@@ -1,0 +1,27 @@
+En corto: correr la simulación no debería dañar una computadora en buen estado. Lo que sí puede ocurrir es que el equipo se caliente, encienda más los ventiladores o reduzca su velocidad automáticamente para protegerse. Por el código de 3d_rheometer.ipynb, el principal esfuerzo es de CPU, no de GPU.
+
+Lo que observé en tu PC y la simulación
+
+Windows reporta un Ryzen 7 7735HS de 8 núcleos y 16 hilos, unos 63 GB de RAM, con 44,6 GB libres en la consulta, y 530,7 GB libres en C:.
+El cálculo usa NumPy y bucles de Python; aunque importa Numba, las funciones principales no aparecen aceleradas con @njit ni usan CUDA. Así que la RTX 4060 no está haciendo el cálculo de partículas.
+La construcción de la lista de vecinos compara pares de partículas y está marcada en el código como 
+𝑂
+(
+𝑁
+2
+)
+O(N 
+2
+ ). Dicho sencillamente: al aumentar las partículas, el cálculo puede crecer rápidamente. Para 6.293 partículas la simulación ya midió unos 64 segundos para 100 pasos.
+Cada paso guarda posiciones, velocidades y tiempo: unos 302 KB. Eso equivale a unos 30 MB por 100 pasos, 3 GB por 10.000 y 30 GB por 100.000, aproximadamente. Los archivos se abren con modo 'wb', así que cada ejecución nueva reemplaza los binarios anteriores.
+Aunque frameIterSep vale 100, el bucle guarda los binarios en cada paso. Por eso se registran 100 frames para 100 pasos; ese parámetro no está reduciendo actualmente la frecuencia de guardado.
+La RAM parece suficiente para esta ejecución y el espacio del SSD también. La cifra de “4 GB” que Windows reportó para la RTX puede ser inexacta; puedes revisar su memoria dedicada en Administrador de tareas → Rendimiento → GPU. En cualquier caso, la GPU no es el límite principal de este código.
+
+Cómo vigilarla sin complicarte
+
+Pon la laptop sobre una superficie firme, sin tapar las rejillas de ventilación, y usa el cargador adecuado.
+Abre Administrador de tareas → Rendimiento para observar CPU, RAM, GPU y disco. Para temperaturas, usa HWiNFO en modo Sensors; el Administrador de tareas normalmente no muestra todas.
+Haz una prueba de duración moderada y observa la temperatura del procesador. Si permanece cerca del límite térmico indicado por el fabricante, aparece thermal throttling, hay apagados inesperados o los ventiladores dejan de funcionar correctamente, detén la prueba y revisa la refrigeración.
+Usa el tiempo medido por tu simulación para estimar ejecuciones largas. Si el ritmo actual se mantuviera, 1.000 pasos serían aproximadamente 11 minutos; es una estimación, no una garantía.
+Antes de una corrida larga, estima el tamaño de salida con unos 302 KB por paso y deja espacio libre para Windows y otros archivos.
+El uso alto de CPU, por sí solo, no significa que el equipo se esté dañando: las laptops reducen su velocidad o se apagan si alcanzan límites de protección. Para mejorar el rendimiento, el siguiente paso sería perfilar la simulación y acelerar los bucles de cálculo; eso reduciría el tiempo de carga, aunque no cambia las precauciones de temperatura y espacio.
